@@ -97,25 +97,38 @@ jobs:
 
               console.log('Waiting for response...');
 
+              let responseText = '';
               try {
                   // ✅ 1. Wait for the loading spinner to disappear
                   await page.waitForFunction(() => {
                       const loader = document.querySelector('div[aria-busy="true"], .loading-spinner');
                       return !loader;
-                  }, { timeout: 30000 });
+                  }, { timeout: 60000 });
 
-                  // ✅ 2. Wait for the first real AI response
-                  await page.waitForSelector('.message-bubble:not(.system-message)', { timeout: 30000 });
+                  // ✅ 2. Wait for new responses with continuous checking
+                  let elapsed = 0;
+                  while (elapsed < 180000) { // Wait up to 3 minutes
+                      const partialResponse = await page.evaluate(() => {
+                          return Array.from(document.querySelectorAll('.message-bubble:not(.system-message)'))
+                              .map(el => el.innerText.trim())
+                              .filter(text => text.length > 0)
+                              .join('\n\n');
+                      });
 
-                  // ✅ 3. Extract only the latest AI response
-                  const responseText = await page.evaluate(() => {
-                      const messages = Array.from(document.querySelectorAll('.message-bubble:not(.system-message)'));
-                      return messages.length ? messages[messages.length - 1].innerText.trim() : 'No response detected';
-                  });
+                      if (partialResponse) {
+                          console.log('Partial Response:', partialResponse);
+                          responseText = partialResponse;
+                          break;
+                      }
 
-                  console.log('GROK_RESPONSE:', responseText);
+                      await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds before checking again
+                      elapsed += 5000;
+                  }
+
+                  if (!responseText) throw new Error('No valid response received');
+
+                  console.log('Final GROK_RESPONSE:', responseText);
                   fs.writeFileSync('./grok_response.txt', responseText);
-
               } catch (error) {
                   console.error('Response error:', error.message);
                   console.log('Capturing full page content for debugging...');
@@ -138,7 +151,7 @@ jobs:
               process.exit(1);
           });
           EOL
-          
+
       - name: Run Puppeteer script with debugging
         run: |
           QUESTION="${{ github.event.inputs.question || 'What are the latest developments in artificial intelligence?' }}"
