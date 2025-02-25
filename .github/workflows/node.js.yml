@@ -28,7 +28,7 @@ jobs:
           echo "Initializing npm project..."
           npm init -y
           echo "Installing dependencies..."
-          npm install puppeteer-extra puppeteer-extra-plugin-stealth fs debug
+          npm install puppeteer puppeteer-core puppeteer-extra puppeteer-extra-plugin-stealth fs debug
 
       - name: System information
         run: |
@@ -59,6 +59,7 @@ jobs:
 
               const browser = await puppeteer.launch({
                   headless: "new",
+                  executablePath: require('puppeteer').executablePath(),
                   args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--window-size=1280,800']
               });
 
