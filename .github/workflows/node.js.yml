@@ -1,0 +1,122 @@
+name: Grok Interaction Workflow
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'  # Run every 6 hours
+  workflow_dispatch:
+    inputs:
+      question:
+        description: 'Question to ask Grok'
+        required: true
+        default: 'What is the latest news in AI?'
+
+jobs:
+  ask-grok:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install puppeteer@20.7.4
+          
+      - name: Create script directory
+        run: mkdir -p scripts
+        
+      - name: Create Puppeteer script
+        run: |
+          cat > scripts/grok-interaction.js << 'EOL'
+          const puppeteer = require('puppeteer');
+
+          async function interactWithGrok(question) {
+            const browser = await puppeteer.launch({
+              headless: "new",
+              args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+            });
+
+            try {
+              const page = await browser.newPage();
+              await page.setViewport({ width: 1280, height: 800 });
+              
+              await page.goto('https://grok.com', { waitUntil: 'networkidle2' });
+              
+              await page.waitForSelector('textarea', { visible: true });
+              await page.type('textarea', question);
+              
+              const submitButton = await page.$('button[type="submit"]');
+              await submitButton.click();
+              
+              // Adjust this selector based on Grok's actual response element
+              await page.waitForSelector('.response-element', { timeout: 60000 });
+              
+              const responseText = await page.evaluate(() => {
+                const responseElement = document.querySelector('.response-element');
+                return responseElement ? responseElement.innerText : 'Response element not found';
+              });
+              
+              return responseText;
+            } finally {
+              await browser.close();
+            }
+          }
+
+          async function run() {
+            try {
+              const question = process.argv[2] || 'What is the meaning of life?';
+              const response = await interactWithGrok(question);
+              
+              console.log('GROK_RESPONSE:');
+              console.log(response);
+              
+              process.exit(0);
+            } catch (error) {
+              console.error('Script failed:', error);
+              process.exit(1);
+            }
+          }
+
+          run();
+          EOL
+        
+      - name: Run Puppeteer script
+        run: |
+          QUESTION="${{ github.event.inputs.question || 'What are the latest developments in artificial intelligence?' }}"
+          node scripts/grok-interaction.js "$QUESTION"
+        
+      - name: Create artifact of the response
+        if: success()
+        run: |
+          mkdir -p grok-responses
+          TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+          QUESTION="${{ github.event.inputs.question || 'What are the latest developments in artificial intelligence?' }}"
+          FILENAME="grok_response_${TIMESTAMP}.txt"
+          
+          # Extract the response from the output and save to file
+          node -e "
+            const fs = require('fs');
+            const logOutput = fs.readFileSync('/tmp/workflow-log.txt', 'utf8');
+            const responseMatch = logOutput.match(/GROK_RESPONSE:\n([\s\S]*?)(?:\n\n|$)/);
+            if (responseMatch && responseMatch[1]) {
+              fs.writeFileSync('grok-responses/${FILENAME}', '# Question\n\n${QUESTION}\n\n# Response\n\n' + responseMatch[1]);
+              console.log('Response saved to ${FILENAME}');
+            } else {
+              console.error('Could not extract response from logs');
+              process.exit(1);
+            }
+          "
+        
+      - name: Upload response as artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: grok-responses
+          path: grok-responses/
+          retention-days: 7
