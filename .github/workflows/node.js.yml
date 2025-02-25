@@ -72,7 +72,7 @@ jobs:
               console.log('Navigating to Grok chat interface...');
               try {
                   await page.goto('https://grok.com/chat', { waitUntil: 'domcontentloaded', timeout: 90000 });
-                  await page.waitForTimeout(5000);
+                  await new Promise(resolve => setTimeout(resolve, 5000));
                   console.log('Successfully loaded Grok chat');
               } catch (navError) {
                   console.error('Navigation error:', navError.message);
