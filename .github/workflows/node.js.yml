@@ -76,6 +76,8 @@ jobs:
                   console.log('Successfully loaded Grok chat');
               } catch (navError) {
                   console.error('Navigation error:', navError.message);
+                  console.log('Capturing page content for debugging...');
+                  fs.writeFileSync('./screenshots/error_page_content.html', await page.content());
                   throw new Error('Failed to navigate to https://grok.com/chat');
               }
 
@@ -95,21 +97,25 @@ jobs:
 
               console.log('Waiting for response...');
               const responseSelector = '.message:not(:first-child)';
-              await page.waitForSelector(responseSelector, { timeout: 15000 });
-              const responseText = await page.evaluate(sel => document.querySelector(sel).innerText, responseSelector);
-              console.log('GROK_RESPONSE:', responseText);
-              fs.writeFileSync('./grok_response.txt', responseText);
-              await page.screenshot({ path: `${screenshotsDir}/final_state.png` });
+              try {
+                  await page.waitForSelector(responseSelector, { timeout: 15000 });
+                  const responseText = await page.evaluate(sel => document.querySelector(sel).innerText, responseSelector);
+                  console.log('GROK_RESPONSE:', responseText);
+                  fs.writeFileSync('./grok_response.txt', responseText);
+              } catch (error) {
+                  console.error('Response error:', error.message);
+                  console.log('Capturing full page content for debugging...');
+                  fs.writeFileSync('./screenshots/failure_page_content.html', await page.content());
+                  throw new Error('Failed to retrieve response');
+              }
 
+              await page.screenshot({ path: `${screenshotsDir}/final_state.png` });
               await browser.close();
-              return responseText;
           }
 
           async function run() {
               const question = process.argv[2] || 'What is the meaning of life?';
-              const response = await interactWithGrok(question);
-              console.log('GROK_RESPONSE:', response);
-              fs.writeFileSync('./grok_response.txt', response);
+              await interactWithGrok(question);
               process.exit(0);
           }
 
