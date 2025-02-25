@@ -96,22 +96,26 @@ jobs:
               await page.screenshot({ path: `${screenshotsDir}/after_submit.png` });
 
               console.log('Waiting for response...');
-              let responseText = '';
-              try {
-                  await page.waitForFunction(() => {
-                      return Array.from(document.querySelectorAll('p, div'))
-                          .some(el => el.innerText.trim().length > 0);
-                  }, { timeout: 20000 });
 
-                  responseText = await page.evaluate(() => {
-                      return Array.from(document.querySelectorAll('p, div'))
-                          .filter(el => window.getComputedStyle(el).display !== 'none')
-                          .map(el => el.innerText.trim())
-                          .join('\n\n');
+              try {
+                  // ✅ 1. Wait for the loading spinner to disappear
+                  await page.waitForFunction(() => {
+                      const loader = document.querySelector('div[aria-busy="true"], .loading-spinner');
+                      return !loader;
+                  }, { timeout: 30000 });
+
+                  // ✅ 2. Wait for the first real AI response
+                  await page.waitForSelector('.message-bubble:not(.system-message)', { timeout: 30000 });
+
+                  // ✅ 3. Extract only the latest AI response
+                  const responseText = await page.evaluate(() => {
+                      const messages = Array.from(document.querySelectorAll('.message-bubble:not(.system-message)'));
+                      return messages.length ? messages[messages.length - 1].innerText.trim() : 'No response detected';
                   });
 
                   console.log('GROK_RESPONSE:', responseText);
                   fs.writeFileSync('./grok_response.txt', responseText);
+
               } catch (error) {
                   console.error('Response error:', error.message);
                   console.log('Capturing full page content for debugging...');
