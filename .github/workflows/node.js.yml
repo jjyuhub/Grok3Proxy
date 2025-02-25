@@ -17,412 +17,115 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        # Logs: Implicitly logged by GitHub Actions
         
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-        # Logs: Version setup is logged by the action
         
       - name: Install dependencies
         run: |
           echo "Initializing npm project..."
           npm init -y
-          echo "Installing puppeteer@19.0.0..."
-          npm install puppeteer@19.0.0
-          echo "Installing additional debugging dependencies..."
-          npm install puppeteer-screen-recorder debug
-        # Logs: Echo statements provide installation progress
-        
+          echo "Installing dependencies..."
+          npm install puppeteer-extra puppeteer-extra-plugin-stealth fs debug
+
       - name: System information
         run: |
-          echo "Collecting system information for debugging..."
           echo "Node version: $(node -v)"
           echo "NPM version: $(npm -v)"
           echo "System info: $(uname -a)"
           echo "Available memory: $(free -h)"
           echo "Available disk space: $(df -h)"
           echo "Network connection: $(curl -s https://www.google.com > /dev/null && echo 'Connected' || echo 'Disconnected')"
-        # Logs: Detailed system info for troubleshooting
-        
+
       - name: Create script directory and screenshots directory
         run: |
-          echo "Creating directories..."
           mkdir -p scripts
           mkdir -p screenshots
-          echo "Directories created: scripts, screenshots"
-        # Logs: Confirms directory creation
-        
-      - name: Create enhanced Puppeteer script
+
+      - name: Create Puppeteer script
         run: |
           echo "Generating Puppeteer script..."
           cat > scripts/grok-interaction.js << 'EOL'
-          const puppeteer = require('puppeteer');
+          const puppeteer = require('puppeteer-extra');
+          const StealthPlugin = require('puppeteer-extra-plugin-stealth');
           const fs = require('fs');
 
+          puppeteer.use(StealthPlugin());
+
           async function interactWithGrok(question) {
-            console.log('Starting Grok interaction process...');
-            console.log(`Current working directory: ${process.cwd()}`);
-            console.log(`Node version: ${process.version}`);
-            console.log(`Puppeteer version: ${require('puppeteer/package.json').version}`);
-            
-            // Launch browser with detailed logging
-            console.log('Launching browser...');
-            const browser = await puppeteer.launch({
-              headless: "new",
-              args: [
-                '--no-sandbox',
-                '--disable-setuid-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-gpu',
-                '--window-size=1280,800'
-              ],
-              dumpio: true // Log browser console to Node process
-            });
-            
-            console.log('Browser launched successfully');
-            let page;
-            
-            try {
-              // Create a new page with logging
-              console.log('Creating new page...');
-              page = await browser.newPage();
-              
-              // Enable verbose logging for page events
-              page.on('request', request => console.log(`Request: ${request.method()} ${request.url().substring(0, 100)}...`));
-              page.on('response', response => console.log(`Response: ${response.status()} ${response.url().substring(0, 100)}...`));
-              page.on('console', msg => console.log('Browser console:', msg.text()));
-              page.on('pageerror', error => console.error('Page error:', error.message));
-              
-              // Set viewport
-              console.log('Setting viewport to 1280x800...');
+              console.log('Starting Grok interaction process...');
+
+              const browser = await puppeteer.launch({
+                  headless: "new",
+                  args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--window-size=1280,800']
+              });
+
+              const page = await browser.newPage();
               await page.setViewport({ width: 1280, height: 800 });
-              
-              // Ensure screenshots directory exists
+
               const screenshotsDir = './screenshots';
-              if (!fs.existsSync(screenshotsDir)) {
-                console.log('Creating screenshots directory...');
-                fs.mkdirSync(screenshotsDir, { recursive: true });
-                console.log('Screenshots directory created');
-              }
-              
-              // Navigate to Grok with extended timeout and fallbacks
-              console.log('Navigating to Grok.com...');
+              if (!fs.existsSync(screenshotsDir)) fs.mkdirSync(screenshotsDir, { recursive: true });
+
+              console.log('Navigating to Grok chat interface...');
               try {
-                await page.goto('https://www.grok.com', { 
-                  waitUntil: 'domcontentloaded', 
-                  timeout: 90000 // 90-second timeout
-                });
-                console.log('Initial navigation complete, waiting for network to settle...');
-                await page.waitForTimeout(5000); // Additional wait for resources
-                console.log('Navigation to Grok.com successful');
+                  await page.goto('https://grok.com/chat', { waitUntil: 'domcontentloaded', timeout: 90000 });
+                  await page.waitForTimeout(5000);
+                  console.log('Successfully loaded Grok chat');
               } catch (navError) {
-                console.error('Navigation error:', navError.message);
-                console.log(`Current URL after navigation attempt: ${page.url()}`);
-                
-                // Attempt alternative URLs if navigation fails
-                if (!page.url().includes('grok')) {
-                  console.log('Trying navigation to alternate Grok URLs...');
-                  const alternateUrls = [
-                    'https://grok.x.ai/',
-                    'https://grok.com/chat',
-                    'https://app.grok.com/'
-                  ];
-                  
-                  for (const url of alternateUrls) {
-                    try {
-                      console.log(`Attempting to navigate to ${url}`);
-                      await page.goto(url, { 
-                        waitUntil: 'domcontentloaded',
-                        timeout: 60000
-                      });
-                      console.log(`Successfully navigated to ${url}`);
-                      break;
-                    } catch (altNavError) {
-                      console.error(`Error navigating to ${url}:`, altNavError.message);
-                    }
-                  }
-                }
+                  console.error('Navigation error:', navError.message);
+                  throw new Error('Failed to navigate to https://grok.com/chat');
               }
-              
-              // Capture screenshot after navigation
-              console.log('Taking screenshot after navigation...');
+
               await page.screenshot({ path: `${screenshotsDir}/after_navigation.png` });
-              console.log(`Page title: ${await page.title()}`);
-              console.log(`Current URL: ${page.url()}`);
-              
-              // Save page content for debugging
-              const pageContent = await page.content();
-              fs.writeFileSync(`${screenshotsDir}/page_content.html`, pageContent);
-              console.log('Page content saved to page_content.html');
-              
-              // Wait for input element
-              console.log('Waiting for input element (textarea, input, or contenteditable)...');
-              try {
-                await page.waitForSelector('textarea, input[type="text"], div[contenteditable="true"]', { 
-                  visible: true,
-                  timeout: 30000 
-                });
-                console.log('Input element found');
-              } catch (inputError) {
-                console.error('Error finding input element:', inputError.message);
-                
-                // Log available elements for debugging
-                const allElements = await page.evaluate(() => {
-                  return {
-                    inputs: Array.from(document.querySelectorAll('input, textarea')).map(el => ({
-                      tagName: el.tagName,
-                      id: el.id,
-                      className: el.className,
-                      type: el.type || '',
-                      placeholder: el.placeholder || ''
-                    })),
-                    contentEditables: Array.from(document.querySelectorAll('[contenteditable="true"]')).map(el => ({
-                      tagName: el.tagName,
-                      id: el.id,
-                      className: el.className
-                    })),
-                    buttons: Array.from(document.querySelectorAll('button')).map(el => ({
-                      innerText: el.innerText,
-                      id: el.id,
-                      className: el.className,
-                      disabled: el.disabled
-                    }))
-                  };
-                });
-                console.log('Available elements:', JSON.stringify(allElements, null, 2));
-              }
-              
-              // Attempt to enter the question
-              console.log(`Preparing to enter question: "${question}"`);
-              await page.screenshot({ path: `${screenshotsDir}/before_typing.png` });
-              
-              let enteredText = false;
-              
-              // Method 1: Type into textarea
-              try {
-                const textareaSelector = 'textarea';
-                const textareaExists = await page.$(textareaSelector);
-                if (textareaExists) {
-                  console.log('Found textarea, typing question...');
-                  await page.type(textareaSelector, question, { delay: 50 });
-                  console.log('Successfully typed question into textarea');
-                  enteredText = true;
-                } else {
-                  console.log('No textarea found, trying other methods');
-                }
-              } catch (textareaError) {
-                console.error('Error typing in textarea:', textareaError.message);
-              }
-              
-              // Method 2: Use JavaScript to set input value
-              if (!enteredText) {
-                try {
-                  console.log('Attempting to enter text via JavaScript...');
-                  enteredText = await page.evaluate((q) => {
-                    const selectors = [
-                      'textarea',
-                      'input[type="text"]',
-                      '[contenteditable="true"]',
-                      '.ant-input',
-                      '[placeholder*="question"]',
-                      '[placeholder*="ask"]'
-                    ];
-                    for (const selector of selectors) {
-                      const elements = document.querySelectorAll(selector);
-                      if (elements.length > 0) {
-                        const element = elements[0];
-                        if (element.tagName === 'DIV') {
-                          element.innerText = q;
-                        } else {
-                          element.value = q;
-                          const event = new Event('input', { bubbles: true });
-                          element.dispatchEvent(event);
-                        }
-                        return true;
-                      }
-                    }
-                    return false;
-                  }, question);
-                  console.log(`JavaScript text entry ${enteredText ? 'successful' : 'failed'}`);
-                } catch (jsInputError) {
-                  console.error('Error entering text with JavaScript:', jsInputError.message);
-                }
-              }
-              
-              // Capture screenshot after typing
+
+              console.log('Locating input field...');
+              const inputSelector = 'textarea';
+              await page.waitForSelector(inputSelector, { visible: true, timeout: 30000 });
+              await page.type(inputSelector, question, { delay: 50 });
               await page.screenshot({ path: `${screenshotsDir}/after_typing.png` });
-              if (!enteredText) {
-                console.error('Failed to enter text using any method');
-              }
-              
-              // Submit the question
-              console.log('Attempting to submit question...');
-              try {
-                const submitButtonSelector = 'button[type="submit"]';
-                const submitButton = await page.$(submitButtonSelector);
-                if (submitButton) {
-                  console.log('Found submit button, clicking...');
-                  await submitButton.click();
-                  console.log('Submit button clicked');
-                } else {
-                  console.log('No standard submit button found, trying alternatives...');
-                  const buttonSelectors = [
-                    'button:has(svg)',
-                    'button.send',
-                    'button.submit',
-                    'button[aria-label*="send"]',
-                    'button[aria-label*="submit"]',
-                    'button'
-                  ];
-                  let clicked = false;
-                  for (const selector of buttonSelectors) {
-                    try {
-                      const buttons = await page.$$(selector);
-                      if (buttons.length > 0) {
-                        console.log(`Found button with selector: ${selector}, clicking...`);
-                        await buttons[buttons.length - 1].click();
-                        console.log(`Clicked button with selector: ${selector}`);
-                        clicked = true;
-                        break;
-                      }
-                    } catch (buttonError) {
-                      console.log(`Error with button selector ${selector}:`, buttonError.message);
-                    }
-                  }
-                  if (!clicked) {
-                    console.log('No buttons clicked, trying Enter key...');
-                    await page.keyboard.press('Enter');
-                    console.log('Pressed Enter key');
-                  }
-                }
-              } catch (submitError) {
-                console.error('Error submitting question:', submitError.message);
-                console.log('Falling back to Enter key...');
-                try {
-                  await page.keyboard.press('Enter');
-                  console.log('Pressed Enter key as fallback');
-                } catch (enterError) {
-                  console.error('Error pressing Enter key:', enterError.message);
-                }
-              }
-              
-              // Capture screenshot after submission
+
+              console.log('Locating submit button...');
+              const submitSelector = 'button[type="submit"]';
+              await page.waitForSelector(submitSelector, { visible: true, timeout: 10000 });
+              await page.click(submitSelector);
               await page.screenshot({ path: `${screenshotsDir}/after_submit.png` });
-              
-              // Wait for and extract response
+
               console.log('Waiting for response...');
-              let responseText = '';
-              const responseSelectors = [
-                '.response',
-                '.message:not(:first-child)',
-                '.chat-message',
-                '[role="dialog"]',
-                '.chat-response',
-                '.grok-response',
-                'p:not(:first-child)',
-                'div.message'
-              ];
-              
-              try {
-                for (const selector of responseSelectors) {
-                  try {
-                    console.log(`Trying response selector: ${selector}`);
-                    await page.waitForSelector(selector, { timeout: 10000 });
-                    console.log(`Found response element with selector: ${selector}`);
-                    responseText = await page.evaluate((sel) => {
-                      const element = document.querySelector(sel);
-                      return element ? element.innerText : '';
-                    }, selector);
-                    if (responseText && responseText.length > 10) {
-                      console.log(`Retrieved response with selector ${selector}`);
-                      break;
-                    }
-                  } catch (selectorError) {
-                    console.log(`Selector ${selector} not found or timed out`);
-                  }
-                }
-              } catch (responseError) {
-                console.error('Error retrieving response with selectors:', responseError.message);
-              }
-              
-              // Fallback: Extract all visible text if specific selectors fail
-              if (!responseText || responseText.length < 10) {
-                console.log('No specific response found, waiting and extracting all visible text...');
-                await page.waitForTimeout(15000); // Wait 15 seconds
-                await page.screenshot({ path: `${screenshotsDir}/waiting_for_response.png` });
-                responseText = await page.evaluate(() => {
-                  const elements = Array.from(document.querySelectorAll('p, div')).filter(el => {
-                    const style = window.getComputedStyle(el);
-                    return style.display !== 'none' && 
-                           style.visibility !== 'hidden' && 
-                           parseFloat(style.opacity) > 0 &&
-                           el.textContent.trim().length > 0;
-                  });
-                  return elements.map(el => el.textContent.trim()).join('\n\n');
-                });
-                console.log(`Extracted ${responseText.length} characters of general page content`);
-              }
-              
-              // Capture final screenshot
+              const responseSelector = '.message:not(:first-child)';
+              await page.waitForSelector(responseSelector, { timeout: 15000 });
+              const responseText = await page.evaluate(sel => document.querySelector(sel).innerText, responseSelector);
+              console.log('GROK_RESPONSE:', responseText);
+              fs.writeFileSync('./grok_response.txt', responseText);
               await page.screenshot({ path: `${screenshotsDir}/final_state.png` });
-              
-              return responseText || 'No response could be retrieved';
-            } catch (error) {
-              console.error('Unhandled error in interaction process:', error.message);
-              if (page) {
-                try {
-                  await page.screenshot({ path: `${screenshotsDir}/error_state.png` });
-                  const errorPageContent = await page.content();
-                  fs.writeFileSync(`${screenshotsDir}/error_page_content.html`, errorPageContent);
-                  console.log('Error state captured');
-                } catch (screenshotError) {
-                  console.error('Error capturing error state:', screenshotError.message);
-                }
-              }
-              throw error;
-            } finally {
-              if (browser) {
-                console.log('Closing browser...');
-                await browser.close();
-                console.log('Browser closed');
-              }
-            }
+
+              await browser.close();
+              return responseText;
           }
 
           async function run() {
-            try {
-              console.log('Starting script execution');
-              console.log('Command line arguments:', process.argv);
               const question = process.argv[2] || 'What is the meaning of life?';
-              console.log(`Using question: "${question}"`);
               const response = await interactWithGrok(question);
-              console.log('GROK_RESPONSE:');
-              console.log(response);
+              console.log('GROK_RESPONSE:', response);
               fs.writeFileSync('./grok_response.txt', response);
-              console.log('Response saved to grok_response.txt');
-              console.log('Script completed successfully');
               process.exit(0);
-            } catch (error) {
-              console.error('Script failed:', error.message);
-              process.exit(1);
-            }
           }
 
-          run();
+          run().catch(error => {
+              console.error('Script failed:', error.message);
+              process.exit(1);
+          });
           EOL
-          echo "Puppeteer script created at scripts/grok-interaction.js"
-        
+          
       - name: Run Puppeteer script with debugging
         run: |
           QUESTION="${{ github.event.inputs.question || 'What are the latest developments in artificial intelligence?' }}"
           echo "Running script with question: $QUESTION"
           node scripts/grok-interaction.js "$QUESTION" | tee script_output.log
-        # Logs: Output piped to file and console
-        
+
       - name: Upload debug artifacts
-        if: always() # Runs even if previous steps fail
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: debug-artifacts
@@ -430,6 +133,4 @@ jobs:
             screenshots/
             *.log
             *.txt
-            *.html
           retention-days: 7
-        # Logs: Artifact upload logged by GitHub Actions
