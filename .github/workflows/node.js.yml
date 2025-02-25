@@ -77,7 +77,7 @@ jobs:
               } catch (navError) {
                   console.error('Navigation error:', navError.message);
                   console.log('Capturing page content for debugging...');
-                  fs.writeFileSync('./screenshots/error_page_content.html', await page.content());
+                  fs.writeFileSync('./screenshots/failure_page_content.html', await page.content());
                   throw new Error('Failed to navigate to https://grok.com/chat');
               }
 
@@ -96,16 +96,26 @@ jobs:
               await page.screenshot({ path: `${screenshotsDir}/after_submit.png` });
 
               console.log('Waiting for response...');
-              const responseSelector = '.message:not(:first-child)';
+              let responseText = '';
               try {
-                  await page.waitForSelector(responseSelector, { timeout: 15000 });
-                  const responseText = await page.evaluate(sel => document.querySelector(sel).innerText, responseSelector);
+                  await page.waitForFunction(() => {
+                      return Array.from(document.querySelectorAll('p, div'))
+                          .some(el => el.innerText.trim().length > 0);
+                  }, { timeout: 20000 });
+
+                  responseText = await page.evaluate(() => {
+                      return Array.from(document.querySelectorAll('p, div'))
+                          .filter(el => window.getComputedStyle(el).display !== 'none')
+                          .map(el => el.innerText.trim())
+                          .join('\n\n');
+                  });
+
                   console.log('GROK_RESPONSE:', responseText);
                   fs.writeFileSync('./grok_response.txt', responseText);
               } catch (error) {
                   console.error('Response error:', error.message);
                   console.log('Capturing full page content for debugging...');
-                  fs.writeFileSync('./screenshots/failure_page_content.html', await page.content());
+                  fs.writeFileSync('./screenshots/failure_page_content_after_wait.html', await page.content());
                   throw new Error('Failed to retrieve response');
               }
 
