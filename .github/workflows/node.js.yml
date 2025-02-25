@@ -26,7 +26,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm init -y
-          npm install puppeteer@20.7.4
+          npm install puppeteer@19.0.0
           # Install additional dependencies for debugging
           npm install puppeteer-screen-recorder debug
           
