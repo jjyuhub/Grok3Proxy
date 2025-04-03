@@ -231,6 +231,12 @@ jobs:
             try {
               log('Launching browser with stealth mode...', 1);
               
+              let stealth = StealthPlugin()
+              stealth.enabledEvasions.delete('iframe.contentWindow')
+              stealth.enabledEvasions.delete('media.codecs')
+              stealth.enabledEvasions.delete('user-agent-override')
+              puppeteer.use(stealth)
+              
               // Enhanced browser launch options
               browser = await puppeteer.launch({
                   headless: "new",
@@ -242,7 +248,6 @@ jobs:
                       '--disable-accelerated-2d-canvas',
                       '--disable-gpu',
                       '--window-size=1920,1080',
-                      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
                   ],
                   defaultViewport: { width: 1920, height: 1080 },
               });
