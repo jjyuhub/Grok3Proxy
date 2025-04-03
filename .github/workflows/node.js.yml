@@ -60,6 +60,7 @@ jobs:
 
       - name: Create enhanced Puppeteer script
         run: |
+          echo "Generating enhanced Puppeteer script..."
           cat > scripts/grok-interaction.js << 'EOL'
           const puppeteer = require('puppeteer-extra');
           const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -662,9 +663,9 @@ jobs:
                   log('Browser closed', 1);
               }
           }
-        }
+          }
 
-        async function run() {
+          async function run() {
             const question = process.argv[2] || 'What is the meaning of life?';
             const debugLevel = process.argv[3] || '2';
             
@@ -676,10 +677,10 @@ jobs:
                 logError('Script failed', error);
                 process.exit(1);
             }
-        }
+          }
 
-        // Run the script
-        run();
+          // Run the script
+          run();
           EOL
 
       - name: Run enhanced script with debugging
