@@ -60,7 +60,6 @@ jobs:
 
       - name: Create enhanced Puppeteer script
         run: |
-          echo "Generating enhanced Puppeteer script..."
           cat > scripts/grok-interaction.js << 'EOL'
           const puppeteer = require('puppeteer-extra');
           const StealthPlugin = require('puppeteer-extra-plugin-stealth');
@@ -681,7 +680,7 @@ jobs:
 
         // Run the script
         run();
-        EOL
+          EOL
 
       - name: Run enhanced script with debugging
         run: |
